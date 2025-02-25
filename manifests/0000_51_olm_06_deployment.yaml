@@ -49,6 +49,28 @@ spec:
           - mountPath: /operand-assets
             name: operand-assets
           terminationMessagePolicy: FallbackToLogsOnError
+        - name: copy-catalogd-metadata
+          image: quay.io/openshift/origin-olm-catalogd:latest
+          imagePullPolicy: IfNotPresent
+          command:
+          - /bin/sh
+          args:
+            - -c
+            - /catalogd list-feature-gates --output json > /operand-assets/metadata/catalogd.json # || true
+          volumeMounts:
+          - mountPath: /operand-assets/metadata
+            name: operand-metadata
+        - name: copy-operator-controller-metadata
+          image: quay.io/openshift/origin-olm-operator-controller:latest
+          imagePullPolicy: IfNotPresent
+          command:
+          - /bin/sh
+          args:
+            - -c
+            - /operator-controller list-feature-gates --output json > /operand-assets/metadata/operator-controller.json # || true
+          volumeMounts:
+          - mountPath: /operand-assets/metadata
+            name: operand-metadata
       containers:
       - name: cluster-olm-operator
         image: quay.io/openshift/origin-cluster-olm-operator:latest
@@ -86,12 +108,16 @@ spec:
           name: cluster-olm-operator-serving-cert
         - mountPath: /operand-assets
           name: operand-assets
+        - mountPath: /operand-assets/metadata
+          name: operand-metadata
       volumes:
       - name: cluster-olm-operator-serving-cert
         secret:
           secretName: cluster-olm-operator-serving-cert
           optional: true
       - name: operand-assets
+        emptyDir: {}
+      - name: operand-metadata
         emptyDir: {}
       nodeSelector:
         kubernetes.io/os: linux

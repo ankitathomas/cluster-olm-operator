@@ -12,9 +12,11 @@ func TestMapper_ControllerUpstreamForDownstream(t *testing.T) {
 	t.Run("returns mapped upstream gates for operator-controller", func(t *testing.T) {
 		expectedUpstreamGates := []string{"HelloGate", "WorldGate"}
 
-		mapper := NewMapper()
-		mapper.operatorControllerGates = map[configv1.FeatureGateName][]string{
-			features.FeatureGateNewOLM: expectedUpstreamGates,
+		mapper := NewMapper("")
+		mapper.componentGates = map[string]map[configv1.FeatureGateName][]string{
+			"operator-controller": {
+				features.FeatureGateNewOLM: expectedUpstreamGates,
+			},
 		}
 		upstream := mapper.OperatorControllerUpstreamForDownstream(features.FeatureGateNewOLM)
 		if !slices.Equal(upstream, expectedUpstreamGates) {
@@ -29,9 +31,11 @@ func TestMapper_CatalogdUpstreamForDownstream(t *testing.T) {
 	t.Run("returns mapped upstream gates for catalogd", func(t *testing.T) {
 		expectedUpstreamGates := []string{"HelloGate", "WorldGate"}
 
-		mapper := NewMapper()
-		mapper.catalogdGates = map[configv1.FeatureGateName][]string{
-			features.FeatureGateNewOLM: expectedUpstreamGates,
+		mapper := NewMapper("")
+		mapper.componentGates = map[string]map[configv1.FeatureGateName][]string{
+			"catalogd": {
+				features.FeatureGateNewOLM: expectedUpstreamGates,
+			},
 		}
 		upstream := mapper.CatalogdUpstreamForDownstream(features.FeatureGateNewOLM)
 		if !slices.Equal(upstream, expectedUpstreamGates) {
@@ -42,7 +46,7 @@ func TestMapper_CatalogdUpstreamForDownstream(t *testing.T) {
 	})
 }
 
-func TestFormatAsEnabledArgs(t *testing.T) {
+func TestFormatAsFeatureGateArgs(t *testing.T) {
 	testCases := []struct {
 		name     string
 		in       []string
@@ -64,7 +68,7 @@ func TestFormatAsEnabledArgs(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			result := FormatAsEnabledArgs(testCase.in)
+			result := FormatAsFeatureGateArgs(testCase.in, nil)
 			if result != testCase.expected {
 				t.Fatalf("result and expected differ, expected: %q, got: %q", testCase.expected, result)
 			}

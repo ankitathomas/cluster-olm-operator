@@ -37,17 +37,19 @@ func UpdateDeploymentFeatureGatesHook(
 			return fmt.Errorf("error getting featuregates.config.openshift.io/cluster: %w", err)
 		}
 
-		var upstreamGates []string
+		var upstreamEnabledGates, upstreamDisabledGates []string
 		switch deployment.Name {
 		case operatorControllerDeploymentName:
-			upstreamGates = upstreamFeatureGates(
+			upstreamEnabledGates, upstreamDisabledGates = upstreamFeatureGates(
 				clusterGatesConfig,
+				featuresMapper.UpstreamDefaults("operator-controller"),
 				featuresMapper.OperatorControllerDownstreamFeatureGates(),
 				featuresMapper.OperatorControllerUpstreamForDownstream,
 			)
 		case catalogdDeploymentName:
-			upstreamGates = upstreamFeatureGates(
+			upstreamEnabledGates, upstreamDisabledGates = upstreamFeatureGates(
 				clusterGatesConfig,
+				featuresMapper.UpstreamDefaults("catalogd"),
 				featuresMapper.CatalogdDownstreamFeatureGates(),
 				featuresMapper.CatalogdUpstreamForDownstream,
 			)
@@ -55,9 +57,9 @@ func UpdateDeploymentFeatureGatesHook(
 			logger.V(4).Info("unrecognized deployment", "deployment", deployment.Name)
 			return nil
 		}
-		logger.V(4).Info("enabled feature gates", "feature gates", upstreamGates, "deployment", deployment.Name)
+		logger.V(4).Info("enabled feature gates", "enabled feature gates", upstreamEnabledGates, "disabled feature gates", upstreamDisabledGates, "deployment", deployment.Name)
 
-		argToSet := internalfeatures.FormatAsEnabledArgs(upstreamGates)
+		argToSet := internalfeatures.FormatAsFeatureGateArgs(upstreamEnabledGates, upstreamDisabledGates)
 		var errs []error
 		for i := range deployment.Spec.Template.Spec.Containers {
 			logger.V(4).Info("iterating containers", "container", deployment.Spec.Template.Spec.Containers[i].Name, "deployment", deployment.Name)
@@ -78,13 +80,14 @@ func UpdateDeploymentFeatureGatesHook(
 }
 
 // upstreamFeatureGates build and returns a unique and ordered list of upstream feature gates names
-// that map to the provided enabled downstream feature gates
+// that map to the provided downstream feature gates
 func upstreamFeatureGates(
 	clusterGatesConfig featuregates.FeatureGate,
+	upstreamDefaultsConfig featuregates.FeatureGate,
 	downstreamGates []configv1.FeatureGateName,
 	downstreamToUpstreamFunc func(configv1.FeatureGateName) []string,
-) []string {
-	var upstreamGates []string
+) (enabled, disabled []string) {
+	var upstreamEnabledGates, upstreamDisabledGates []string
 
 	seen := make(map[string]struct{})
 	for _, downstreamGate := range downstreamGates {
@@ -98,10 +101,25 @@ func upstreamFeatureGates(
 			}
 
 			seen[upstreamGate] = struct{}{}
-			upstreamGates = append(upstreamGates, upstreamGate)
+			if !clusterGatesConfig.Enabled(downstreamGate) && upstreamDefaultsConfig.Enabled(configv1.FeatureGateName(upstreamGate)) {
+				//enabled by default upstream but not downstream
+				upstreamDisabledGates = append(upstreamDisabledGates, upstreamGate)
+			} else if clusterGatesConfig.Enabled(downstreamGate) {
+				upstreamEnabledGates = append(upstreamEnabledGates, upstreamGate)
+			}
 		}
 	}
-	slices.Sort(upstreamGates)
+	for _, upstreamGate := range upstreamDefaultsConfig.KnownFeatures() {
+		if _, found := seen[string(upstreamGate)]; found {
+			continue
+		}
+		if upstreamDefaultsConfig.Enabled(upstreamGate) {
+			// upstream feature gate on by default with no downstream mapping
+			upstreamDisabledGates = append(upstreamDisabledGates, string(upstreamGate))
+		}
+	}
+	slices.Sort(upstreamEnabledGates)
+	slices.Sort(upstreamDisabledGates)
 
-	return upstreamGates
+	return upstreamEnabledGates, upstreamDisabledGates
 }

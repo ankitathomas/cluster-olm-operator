@@ -130,7 +130,7 @@ func New(cc *controllercmd.ControllerContext) (*Clients, error) {
 		KubeInformerFactory:    informers.NewSharedInformerFactory(kubeClient, defaultResyncPeriod),
 		ConfigInformerFactory:  configInformerFactory,
 		FeatureGatesAccessor:   setupFeatureGatesAccessor(kubeClient, configInformerFactory, cc.OperatorNamespace),
-		FeatureGateMapper:      internalfeatures.NewMapper(),
+		FeatureGateMapper:      internalfeatures.NewMapper("/operand-assets/metadata"),
 	}, nil
 }
 
